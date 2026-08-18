@@ -319,24 +319,35 @@ function extractFinancials(workbook){
 }
 
 function extractInventory(workbook){
-  // Prefer the sheet literally named "Business Inventory Template" — the
-  // workbook has other tabs (Dashboard, etc.) whose headers can look similar,
-  // and a fuzzy content search could grab the wrong one.
-  const namedSheet = workbook.SheetNames.find(n => n.trim().toLowerCase() === "business inventory template");
-  let table;
-  if(namedSheet){
-    const rows = sheetRows(workbook, namedSheet);
-    table = { name: namedSheet, rows };
-  } else {
-    table = findSheetByHeaderText(workbook, ["product name", "realtime stocks quantity"]);
-  }
-  if(!table) throw new Error("Couldn't find the main inventory table (needs a 'PRODUCT NAME' + stock-quantity header, or a sheet named 'Business Inventory Template').");
-  window.__DEBUG_INV_SHEET = { usedNamedSheet: !!namedSheet, sheetName: table.name, allSheetNames: workbook.SheetNames };
-  const rows = table.rows;
   // stock-qty / inventory-value column headers have been renamed at least
   // once already — match on any known wording rather than one fixed string.
   const STOCK_HEADERS = ["realtime stocks quantity","total stock qty","stock qty","stock quantity"];
   const VALUE_HEADERS = ["inventory value","total inventory value"];
+
+  // Prefer a sheet whose NAME contains "business" + "inventory" (fuzzy, in
+  // case of extra spacing/wording) — the workbook has other tabs (Dashboard,
+  // etc.) whose headers can look similar, and a pure content search could
+  // grab the wrong one.
+  const namedSheet = workbook.SheetNames.find(n => {
+    const t = n.trim().toLowerCase();
+    return t.includes("business") && t.includes("inventory");
+  });
+  let table = null;
+  if(namedSheet){
+    table = { name: namedSheet, rows: sheetRows(workbook, namedSheet) };
+  }
+  if(!table){
+    for(const n of workbook.SheetNames){
+      const rows = sheetRows(workbook, n);
+      if(!rows) continue;
+      const hasProduct = rows.some(row => row.some(c => cellText(c).toLowerCase()==="product name"));
+      const hasStock = rows.some(row => row.some(c => STOCK_HEADERS.includes(cellText(c).toLowerCase())));
+      if(hasProduct && hasStock){ table = {name:n, rows}; break; }
+    }
+  }
+  if(!table) throw new Error("Couldn't find the main inventory table. Sheets in this file: " + workbook.SheetNames.join(", "));
+  window.__DEBUG_INV_SHEET = { usedNamedSheet: !!namedSheet, sheetName: table.name, allSheetNames: workbook.SheetNames };
+  const rows = table.rows;
   const hdr = findHeaderRow(rows, ["product name","cost per item","sku"]);
   if(!hdr) throw new Error("Inventory header row didn't match expected columns.");
   const headerRowRaw = rows[hdr.rowIdx].map(c=>cellText(c).toLowerCase());
