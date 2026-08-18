@@ -330,6 +330,12 @@ function extractInventory(workbook){
         cCost = idx("cost per item"), cSku = idx("sku"), cStock = idx("realtime stocks quantity"), cVal = idx("inventory value"),
         cLaz = idx("lazada"), cShp = idx("shopee"), cTtk = idx("tiktok"), cDir = idx("direct");
 
+  window.__DEBUG_INV = {
+    headerRow: rows[hdr.rowIdx],
+    sampleRawRows: rows.slice(hdr.rowIdx+1, hdr.rowIdx+4),
+    colIndex: {cVendor,cName,cPart,cExp,cCost,cSku,cStock,cVal,cLaz,cShp,cTtk,cDir},
+  };
+
   const items = [];
   for(let r=hdr.rowIdx+1; r<rows.length; r++){
     const name = cellText(rows[r][cName]);
@@ -344,6 +350,9 @@ function extractInventory(workbook){
   // scorecard (may live on a different sheet)
   const score = findSheetByHeaderText(workbook, ["total inventory value"]);
   const scoreRows = score ? score.rows : rows;
+  window.__DEBUG_INV.scoreSheetFound = !!score;
+  window.__DEBUG_INV.scoreRawValueRight = findValueRight(scoreRows,"Total Inventory Value");
+  window.__DEBUG_INV.scoreRawValueBelow = findValueBelow(scoreRows,"Total Inventory Value");
   const scorecard = {
     totalValue: toNum(findValueRight(scoreRows,"Total Inventory Value")) || items.reduce((s,i)=>s+i.val,0),
     totalStock: toNum(findValueRight(scoreRows,"Total Stock Quantity")) || items.reduce((s,i)=>s+Math.max(i.stock,0),0),
