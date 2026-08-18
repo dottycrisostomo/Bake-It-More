@@ -339,7 +339,11 @@ function extractInventory(workbook){
   const items = [];
   for(let r=hdr.rowIdx+1; r<rows.length; r++){
     const name = cellText(rows[r][cName]);
-    if(!name) continue;
+    // skip blank rows and any grand-total / subtotal row so it doesn't get
+    // counted as a giant phantom "item" and double the real sum.
+    if(!name || /^(grand\s*)?total/i.test(name)) continue;
+    const vendorText = cellText(rows[r][cVendor]);
+    if(/^(grand\s*)?total/i.test(vendorText)) continue;
     items.push({
       v: cellText(rows[r][cVendor]), n: name, p: cellText(rows[r][cPart]), exp: cellText(rows[r][cExp]),
       cost: toNum(rows[r][cCost]), sku: toNum(rows[r][cSku]), stock: toNum(rows[r][cStock]), val: toNum(rows[r][cVal]),
