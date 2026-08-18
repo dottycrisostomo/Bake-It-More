@@ -98,9 +98,18 @@ function findSheetByHeaderText(workbook, mustContain){
 function cellText(v){ return (v===undefined||v===null) ? "" : String(v).trim(); }
 function toNum(v){
   if(v===undefined||v===null||v==="") return 0;
-  const s = String(v).replace(/[₱P,]/g,"").replace(/^\((.*)\)$/,"-$1").trim();
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
+  let s = String(v).trim();
+  if(s==="") return 0;
+  const negParen = /^\(.*\)$/.test(s);
+  if(negParen) s = s.slice(1,-1);
+  // pull out the first plain numeric run instead of trying to strip every
+  // possible currency prefix (₱, PHP, P, etc.) — far more robust across
+  // whatever formatting a given sheet actually uses.
+  const m = s.match(/-?\d[\d,]*\.?\d*/);
+  if(!m) return 0;
+  const n = parseFloat(m[0].replace(/,/g,""));
+  if(isNaN(n)) return 0;
+  return negParen ? -n : n;
 }
 /* label above, value in the same column one row below (dashboard KPI style) */
 function findValueBelow(rows, label){
