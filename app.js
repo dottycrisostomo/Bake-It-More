@@ -37,7 +37,11 @@ function signOut(){
 /* --------------------------------- DRIVE ---------------------------------- */
 const DRIVE = "https://www.googleapis.com/drive/v3";
 async function driveFetch(url){
-  const res = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+  // cache: 'no-store' + a cache-busting param — otherwise the browser (or an
+  // intermediate cache) can serve a stale copy of the file on "refresh" and
+  // the numbers silently stop updating even though nothing looks wrong.
+  const bust = (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const res = await fetch(url + bust, { headers: { Authorization: "Bearer " + accessToken }, cache: "no-store" });
   if(!res.ok) throw new Error("Drive API " + res.status + " for " + url);
   return res;
 }
