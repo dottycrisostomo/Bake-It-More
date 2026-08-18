@@ -166,13 +166,13 @@ function extractSales(workbook){
   const chanHeader = findHeaderRow(rows, ["channel","orders","qty","sales","cost","profit"]);
   const channels = [];
   if(chanHeader){
-    const {rowIdx} = chanHeader;
-    for(let r=rowIdx+1; r<rows.length; r++){
-      const name = cellText(rows[r][1]);
+    const [nameCol, ordersCol, qtyCol, salesCol, costCol, profitCol] = chanHeader.cols;
+    for(let r=chanHeader.rowIdx+1; r<rows.length; r++){
+      const name = cellText(rows[r][nameCol]);
       if(!name || /^total$/i.test(name)) break;
       channels.push({
-        name, orders: toNum(rows[r][2]), qty: toNum(rows[r][3]),
-        sales: toNum(rows[r][4]), cost: toNum(rows[r][5]), profit: toNum(rows[r][6]),
+        name, orders: toNum(rows[r][ordersCol]), qty: toNum(rows[r][qtyCol]),
+        sales: toNum(rows[r][salesCol]), cost: toNum(rows[r][costCol]), profit: toNum(rows[r][profitCol]),
       });
     }
   }
@@ -246,7 +246,9 @@ function extractFinancials(workbook){
     const hdrRow = rows[monthHeader.rowIdx];
     const monthCols = [];
     hdrRow.forEach((c,i)=>{ if(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$/i.test(cellText(c))) monthCols.push({i, m: cellText(c)}); });
-    const findRow = (label) => { for(let r=monthHeader.rowIdx+1;r<rows.length;r++){ if(cellText(rows[r][1]).toLowerCase()===label.toLowerCase()) return rows[r]; } return null; };
+    // search every column for the row label, not a hardcoded index — the
+    // label's exact column position can shift depending on the sheet.
+    const findRow = (label) => { for(let r=monthHeader.rowIdx+1;r<rows.length;r++){ if(rows[r].some(c => cellText(c).toLowerCase()===label.toLowerCase())) return rows[r]; } return null; };
     const revRow = findRow("Revenue"), expRow = findRow("Expenses"), niRow = findRow("Net Income");
     monthCols.forEach(({i,m}) => {
       monthly.push({ m, rev: revRow?toNum(revRow[i]):0, exp: Math.abs(expRow?toNum(expRow[i]):0), ni: niRow?toNum(niRow[i]):0 });
