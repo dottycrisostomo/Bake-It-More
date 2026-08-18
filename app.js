@@ -319,16 +319,33 @@ function extractFinancials(workbook){
 }
 
 function extractInventory(workbook){
-  const table = findSheetByHeaderText(workbook, ["product name", "realtime stocks quantity"]);
-  if(!table) throw new Error("Couldn't find the main inventory table (needs 'PRODUCT NAME' + 'REALTIME STOCKS QUANTITY' header).");
+  // Prefer the sheet literally named "Business Inventory Template" — the
+  // workbook has other tabs (Dashboard, etc.) whose headers can look similar,
+  // and a fuzzy content search could grab the wrong one.
+  const namedSheet = workbook.SheetNames.find(n => n.trim().toLowerCase() === "business inventory template");
+  let table;
+  if(namedSheet){
+    const rows = sheetRows(workbook, namedSheet);
+    table = { name: namedSheet, rows };
+  } else {
+    table = findSheetByHeaderText(workbook, ["product name", "realtime stocks quantity"]);
+  }
+  if(!table) throw new Error("Couldn't find the main inventory table (needs a 'PRODUCT NAME' + stock-quantity header, or a sheet named 'Business Inventory Template').");
+  window.__DEBUG_INV_SHEET = { usedNamedSheet: !!namedSheet, sheetName: table.name, allSheetNames: workbook.SheetNames };
   const rows = table.rows;
-  const hdr = findHeaderRow(rows, ["product name","cost per item","sku","realtime stocks quantity","inventory value"]);
+  // stock-qty / inventory-value column headers have been renamed at least
+  // once already — match on any known wording rather than one fixed string.
+  const STOCK_HEADERS = ["realtime stocks quantity","total stock qty","stock qty","stock quantity"];
+  const VALUE_HEADERS = ["inventory value","total inventory value"];
+  const hdr = findHeaderRow(rows, ["product name","cost per item","sku"]);
   if(!hdr) throw new Error("Inventory header row didn't match expected columns.");
   const headerRowRaw = rows[hdr.rowIdx].map(c=>cellText(c).toLowerCase());
   const idx = (name) => headerRowRaw.indexOf(name);
+  const idxAny = (names) => { for(const n of names){ const i = headerRowRaw.indexOf(n); if(i>=0) return i; } return -1; };
   const cVendor = 0, cName = idx("product name"), cPart = idx("particulars"), cExp = idx("expiry"),
-        cCost = idx("cost per item"), cSku = idx("sku"), cStock = idx("realtime stocks quantity"), cVal = idx("inventory value"),
+        cCost = idx("cost per item"), cSku = idx("sku"), cStock = idxAny(STOCK_HEADERS), cVal = idxAny(VALUE_HEADERS),
         cLaz = idx("lazada"), cShp = idx("shopee"), cTtk = idx("tiktok"), cDir = idx("direct");
+  if(cStock<0 || cVal<0) throw new Error("Couldn't find the Stock Qty / Inventory Value columns — header text: " + JSON.stringify(rows[hdr.rowIdx]));
 
   window.__DEBUG_INV = {
     headerRow: rows[hdr.rowIdx],
@@ -351,22 +368,20 @@ function extractInventory(workbook){
     });
   }
 
-  // scorecard (may live on a different sheet)
-  const score = findSheetByHeaderText(workbook, ["total inventory value"]);
-  const scoreRows = score ? score.rows : rows;
-  window.__DEBUG_INV.scoreSheetFound = !!score;
-  window.__DEBUG_INV.scoreRawValueRight = findValueRight(scoreRows,"Total Inventory Value");
-  window.__DEBUG_INV.scoreRawValueBelow = findValueBelow(scoreRows,"Total Inventory Value");
+  // Compute every summary number directly from the Business Inventory
+  // Template rows themselves, rather than trusting a separate Dashboard/
+  // scorecard cell elsewhere in the workbook — that cell can be a stale
+  // pivot/cached value that drifts from the real, live item table.
   const scorecard = {
-    totalValue: toNum(findValueRight(scoreRows,"Total Inventory Value")) || items.reduce((s,i)=>s+i.val,0),
-    totalStock: toNum(findValueRight(scoreRows,"Total Stock Quantity")) || items.reduce((s,i)=>s+Math.max(i.stock,0),0),
-    outOfStock: toNum(findValueRight(scoreRows,"Out of Stock Count")) || items.filter(i=>i.stock<=0).length,
+    totalValue: items.reduce((s,i)=>s+i.val,0),
+    totalStock: items.reduce((s,i)=>s+Math.max(i.stock,0),0),
+    outOfStock: items.filter(i=>i.stock<=0).length,
   };
   const platform = {
-    Lazada: toNum(findValueRight(scoreRows,"Lazada")),
-    Shopee: toNum(findValueRight(scoreRows,"Shopee")),
-    TikTok: toNum(findValueRight(scoreRows,"Tiktok")),
-    Direct: toNum(findValueRight(scoreRows,"Direct")),
+    Lazada: items.reduce((s,i)=>s+i.laz,0),
+    Shopee: items.reduce((s,i)=>s+i.shp,0),
+    TikTok: items.reduce((s,i)=>s+i.ttk,0),
+    Direct: items.reduce((s,i)=>s+i.dir,0),
   };
 
   return { items, scorecard, platform };
