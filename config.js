@@ -23,4 +23,9 @@ const CONFIG = {
   // Fixed files (these don't rotate monthly/yearly).
   INVENTORY_FILE_ID: "1aomSz_xj1UHwEgbFj_HwJcyy6EbVmjyzfSSsjyxmGJ8",
   PRICELIST_FILE_ID: "1BBgxtUYzO6l-q41GCQW7zTpzlgufEYEu",
+
+  // One sheet, one tab per month (e.g. "July 2026", "August 2026") — the
+  // Shopee/Lazada/TikTok platform income statements you type in by hand
+  // each month from the downloaded platform reports.
+  PLATFORM_INCOME_FILE_ID: "1vvkpK4hykchRD3Dr66FUil22r4Lk_ad2pLNQOP7fjrY",
 };
