@@ -419,7 +419,7 @@ function platformTablesHtml(rows, netLabel){
         <tbody>
           ${rollupRows.map(platformRowHtml).join('')}
           ${otherRows.map(r=>`<tr><td>${esc(r.label)}</td><td class="num" colspan="3"></td><td class="num tot">${r.total?peso(r.total,{decimals:2}):'—'}</td></tr>`).join('')}
-          ${platformRowHtml(netIncome)}
+          <tr class="grand"><td>${esc(netIncome.label)}</td><td class="num" colspan="3"></td><td class="num tot">${netIncome.total?peso(netIncome.total,{decimals:2}):'—'}</td></tr>
         </tbody>
       </table></div>
     </div>`;
