@@ -363,6 +363,7 @@ function renderFinancials(){
 
 /* ============================= PLATFORM REPORT ============================= */
 let platformMonth = null;
+let platformMode = 'monthly'; // 'monthly' | 'ytd'
 function platformRowHtml(r){
   const cls = r.subtotal ? 'subtotal' : (r.group==='grand' ? 'grand' : '');
   const fmt = (v) => v ? peso(v,{decimals:2}) : '—';
@@ -374,12 +375,7 @@ function platformRowHtml(r){
     <td class="num tot">${fmt(r.total)}</td>
   </tr>`;
 }
-function renderPlatformReport(){
-  const v = document.getElementById('view-platform');
-  const months = window.PLATFORM_INCOME_MONTHS || [];
-  if(!months.length){ v.innerHTML = `<div class="view-head"><h2>Platform Report</h2></div>${emptyState('No monthly platform statements found yet — add a tab to the Platform Income Statements sheet to get started.')}`; return; }
-  if(!platformMonth) platformMonth = months[months.length-1];
-  const rows = extractPlatformIncomeMonth(window.PLATFORM_INCOME_WB, platformMonth) || [];
+function platformTablesHtml(rows, netLabel){
   const byKey = (k) => rows.find(r=>r.key===k) || {shopee:0,lazada:0,tiktok:0,total:0};
   const revenueRows = rows.filter(r=>r.group==='revenue');
   const expenseRows = rows.filter(r=>r.group==='expenses');
@@ -388,17 +384,12 @@ function renderPlatformReport(){
   const netBeforeTax = byKey('netIncomeBeforeTaxes');
   const netIncome = byKey('netIncome');
 
-  v.innerHTML = `
-    <div class="view-head"><h2>Platform Report</h2>
-      <select id="platformMonthSel" style="padding:7px 10px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;font-family:inherit;">
-        ${months.map(m=>`<option value="${esc(m)}" ${m===platformMonth?'selected':''}>${esc(m)}</option>`).join('')}
-      </select>
-    </div>
+  return `
     ${kpiGrid([
       {label:'Total Revenues', value:peso(byKey('totalRevenues').total,{compact:true})},
       {label:'Expenses per Platform', value:peso(expenseRows.find(r=>r.key==='expensesPerPlatform')?.total||0,{compact:true})},
       {label:'Net Income Before Taxes', value:peso(netBeforeTax.total,{compact:true})},
-      {label:'Net Income', value:peso(netIncome.total,{compact:true}), sub:'grand total for the month', tone: netIncome.total>=0?'good':'bad'},
+      {label:'Net Income', value:peso(netIncome.total,{compact:true}), sub:netLabel, tone: netIncome.total>=0?'good':'bad'},
     ])}
     <div class="card" style="margin-top:12px;">
       <h3>Revenue &amp; Expenses by Platform</h3>
@@ -429,5 +420,41 @@ function renderPlatformReport(){
         </tbody>
       </table></div>
     </div>`;
-  document.getElementById('platformMonthSel').addEventListener('change', e => { platformMonth = e.target.value; renderPlatformReport(); });
+}
+function renderPlatformReport(){
+  const v = document.getElementById('view-platform');
+  const months = window.PLATFORM_INCOME_MONTHS || [];
+  if(!months.length){ v.innerHTML = `<div class="view-head"><h2>Platform Report</h2></div>${emptyState('No monthly platform statements found yet — add a tab to the Platform Income Statements sheet to get started.')}`; return; }
+  if(!platformMonth) platformMonth = months[months.length-1];
+
+  const modeChips = `<div class="chipbar" style="margin:0;">
+      <button class="chip ${platformMode==='monthly'?'active':''}" data-mode="monthly">Monthly</button>
+      <button class="chip ${platformMode==='ytd'?'active':''}" data-mode="ytd">YTD</button>
+    </div>`;
+  const monthSel = platformMode==='monthly' ? `<select id="platformMonthSel" style="padding:7px 10px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;font-family:inherit;">
+        ${months.map(m=>`<option value="${esc(m)}" ${m===platformMonth?'selected':''}>${esc(m)}</option>`).join('')}
+      </select>` : '';
+
+  let body, headNote;
+  if(platformMode==='monthly'){
+    const rows = extractPlatformIncomeMonth(window.PLATFORM_INCOME_WB, platformMonth) || [];
+    headNote = platformMonth;
+    body = platformTablesHtml(rows, 'grand total for the month');
+  } else {
+    const ytd = computeYTD(window.PLATFORM_INCOME_WB, months);
+    if(!ytd){ body = emptyState('No data available for a YTD roll-up yet.'); headNote = ''; }
+    else {
+      headNote = ytd.year + ' · ' + ytd.months.length + ' month' + (ytd.months.length===1?'':'s') + ' (' + ytd.months.join(', ') + ')';
+      body = platformTablesHtml(ytd.rows, 'year-to-date grand total');
+    }
+  }
+
+  v.innerHTML = `
+    <div class="view-head"><h2>Platform Report</h2><span class="period">${esc(headNote)}</span></div>
+    <div class="toolbar" style="justify-content:space-between;">${modeChips}${monthSel}</div>
+    ${body}`;
+
+  v.querySelectorAll('.chip[data-mode]').forEach(c => c.addEventListener('click', () => { platformMode = c.getAttribute('data-mode'); renderPlatformReport(); }));
+  const sel = document.getElementById('platformMonthSel');
+  if(sel) sel.addEventListener('change', e => { platformMonth = e.target.value; renderPlatformReport(); });
 }
