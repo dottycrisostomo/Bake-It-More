@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bake It More</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%81%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="logo.png">
 <style>
   :root{
     color-scheme: light;
@@ -53,7 +53,7 @@
   header.top{ position:sticky; top:0; z-index:20; background:color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom:1px solid var(--line); }
   .top-inner{ max-width:1180px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .brand{display:flex; align-items:center; gap:10px;}
-  .brand-mark{ width:34px;height:34px;border-radius:9px; background:var(--accent); color:var(--accent-ink); display:flex;align-items:center;justify-content:center; font-family: Georgia,"Iowan Old Style","Times New Roman",serif; font-weight:700; font-size:16px; flex:none; }
+  .brand-mark{ width:38px;height:38px;border-radius:50%; object-fit:cover; flex:none; box-shadow:0 0 0 1px var(--line); }
   .brand-text h1{font-size:15.5px; margin:0; font-weight:700;}
   .brand-text p{font-size:11.5px; margin:1px 0 0; color:var(--ink-3);}
   .sync-pill{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink-2); background:var(--surface); border:1px solid var(--line); padding:6px 11px; border-radius:100px; white-space:nowrap; cursor:pointer; }
@@ -125,6 +125,9 @@
   table.dt td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
   table.dt tr:hover td{background:var(--surface-2);}
   table.dt td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  table.dt td.tot{background:var(--surface-2); font-weight:600;}
+  table.dt tr.subtotal td{font-weight:700; background:var(--surface-2); border-top:1.5px solid var(--line-strong); border-bottom:1.5px solid var(--line-strong);}
+  table.dt tr.grand td{font-weight:700; color:var(--accent); background:var(--accent-wash);}
   .table-wrap{max-height:520px; overflow:auto; border:1px solid var(--line); border-radius:10px;}
 
   .badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:100px; white-space:nowrap; line-height:1.5; }
@@ -179,7 +182,7 @@
   /* ---- sign-in gate ---- */
   #gate{ position:fixed; inset:0; z-index:100; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:20px; }
   .gate-card{ max-width:380px; width:100%; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px 28px; box-shadow:var(--shadow); }
-  .gate-mark{ width:56px; height:56px; border-radius:14px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-family:Georgia,serif; font-weight:700; font-size:26px; margin:0 auto 16px; }
+  .gate-mark{ width:72px; height:72px; border-radius:50%; object-fit:cover; margin:0 auto 16px; box-shadow:0 0 0 1px var(--line); }
   .gate-card h1{font-size:19px; margin:0 0 6px;}
   .gate-card p{font-size:13px; color:var(--ink-2); margin:0 0 22px; line-height:1.5;}
   .gate-btn{ display:inline-flex; align-items:center; gap:10px; background:var(--accent); color:var(--accent-ink); border:none; padding:11px 20px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
@@ -195,7 +198,7 @@
 
 <div id="gate">
   <div class="gate-card">
-    <div class="gate-mark">B</div>
+    <img class="gate-mark" src="logo.png" alt="Bake It More logo">
     <h1>Bake It More</h1>
     <p>Sign in with the Google account that has access to your Order Tracker, Inventory, Price List and Income Statement files to load live data.</p>
     <button class="gate-btn" id="signInBtn">Sign in with Google</button>
@@ -207,7 +210,7 @@
 <header class="top" style="display:none;" id="appHeader">
   <div class="top-inner">
     <div class="brand">
-      <div class="brand-mark">B</div>
+      <img class="brand-mark" src="logo.png" alt="Bake It More logo">
       <div class="brand-text"><h1>Bake It More</h1><p>Operations Dashboard</p></div>
     </div>
     <div class="sync-pill" id="syncPill" title="Click to refresh now">
@@ -226,6 +229,7 @@
   <section class="view" id="view-inventory"></section>
   <section class="view" id="view-pricelist"></section>
   <section class="view" id="view-financials"></section>
+  <section class="view" id="view-platform"></section>
 </main>
 
 <nav class="tabs mobile" id="tabsMobile" style="display:none;"></nav>
