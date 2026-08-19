@@ -476,6 +476,25 @@ function sortMonthNames(names){
   if(parsed.every(p => !isNaN(p.d.getTime()))) return parsed.sort((a,b)=>a.d-b.d).map(p=>p.n);
   return [...names];
 }
+function monthYear(name){
+  const d = new Date(name + " 1");
+  return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+function computeYTD(workbook, months){
+  if(!months.length) return null;
+  const years = months.map(monthYear).filter(y=>y!==null);
+  const thisYear = new Date().getFullYear();
+  const targetYear = years.includes(thisYear) ? thisYear : Math.max(...years, 0);
+  const ytdMonths = months.filter(m => monthYear(m) === targetYear);
+  const perMonth = ytdMonths.map(m => ({ m, rows: extractPlatformIncomeMonth(workbook, m) })).filter(x=>x.rows);
+  if(!perMonth.length) return null;
+  const agg = PLATFORM_INCOME_ROWS.map(def => ({ key:def.key, label:def.label, group:def.group, subtotal:!!def.subtotal, shopee:0, lazada:0, tiktok:0, total:0 }));
+  perMonth.forEach(({rows}) => rows.forEach(r => {
+    const a = agg.find(x=>x.key===r.key);
+    a.shopee += r.shopee; a.lazada += r.lazada; a.tiktok += r.tiktok; a.total += r.total;
+  }));
+  return { rows: agg, months: ytdMonths, year: targetYear };
+}
 
 /* ============================== ORCHESTRATION ============================== */
 async function loadAll(){
