@@ -9,6 +9,7 @@ const ICONS = {
   inventory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
   pricelist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 12.9 12.7 21a2 2 0 0 1-2.8 0L3.5 14.6a2 2 0 0 1 0-2.8L11.4 3.7a2 2 0 0 1 1.4-.6H19a2 2 0 0 1 2 2v6.4a2 2 0 0 1-.4 1.4Z"/><circle cx="15.5" cy="7.5" r="1.4"/></svg>',
   financials: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.4"/><circle cx="12" cy="12" r="3"/><path d="M6 6v12M18 6v12"/></svg>',
+  platform: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M8.5 12h7M8.5 15.5h7M8.5 8.5h3"/></svg>',
 };
 
 let SALES=null, FIN=null, INVENTORY=[], INV_SCORECARD={totalValue:0,totalStock:0,outOfStock:0}, INV_PLATFORM={}, PRICELIST=[];
@@ -90,6 +91,7 @@ function lineChart(containerId, points){
 const TABS = [
   {id:'overview', label:'Overview'}, {id:'inventory', label:'Inventory'},
   {id:'pricelist', label:'Price List'}, {id:'financials', label:'Financials'},
+  {id:'platform', label:'Platform Report'},
 ];
 function buildTabs(){
   ['tabsDesktop','tabsMobile'].forEach(hostId => {
@@ -110,12 +112,16 @@ function renderActiveTab(){
   if(activeTab==='inventory') renderInventory();
   if(activeTab==='pricelist') renderPriceList();
   if(activeTab==='financials') renderFinancials();
+  if(activeTab==='platform') renderPlatformReport();
 }
 function renderAll(){
   SALES = window.SALES_LIVE || SALES;
   FIN = window.FIN_LIVE || FIN;
   if(window.INV_LIVE){ INVENTORY = window.INV_LIVE.items; INV_SCORECARD = window.INV_LIVE.scorecard; INV_PLATFORM = window.INV_LIVE.platform; }
   PRICELIST = window.PL_LIVE || PRICELIST;
+  if(window.PLATFORM_INCOME_MONTHS && window.PLATFORM_INCOME_MONTHS.length && !platformMonth){
+    platformMonth = window.PLATFORM_INCOME_MONTHS[window.PLATFORM_INCOME_MONTHS.length-1];
+  }
   renderActiveTab();
 }
 
@@ -353,4 +359,75 @@ function renderFinancials(){
         <tbody>${FIN.topPayers.length ? FIN.topPayers.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td class="num">${peso(p.amount,{decimals:2})}</td></tr>`).join('') : `<tr><td colspan="3">${emptyState('No payer data found.')}</td></tr>`}</tbody>
       </table></div>
     </div>`;
+}
+
+/* ============================= PLATFORM REPORT ============================= */
+let platformMonth = null;
+function platformRowHtml(r){
+  const cls = r.subtotal ? 'subtotal' : (r.group==='grand' ? 'grand' : '');
+  const fmt = (v) => v ? peso(v,{decimals:2}) : '—';
+  return `<tr class="${cls}">
+    <td>${esc(r.label)}</td>
+    <td class="num">${fmt(r.shopee)}</td>
+    <td class="num">${fmt(r.lazada)}</td>
+    <td class="num">${fmt(r.tiktok)}</td>
+    <td class="num tot">${fmt(r.total)}</td>
+  </tr>`;
+}
+function renderPlatformReport(){
+  const v = document.getElementById('view-platform');
+  const months = window.PLATFORM_INCOME_MONTHS || [];
+  if(!months.length){ v.innerHTML = `<div class="view-head"><h2>Platform Report</h2></div>${emptyState('No monthly platform statements found yet — add a tab to the Platform Income Statements sheet to get started.')}`; return; }
+  if(!platformMonth) platformMonth = months[months.length-1];
+  const rows = extractPlatformIncomeMonth(window.PLATFORM_INCOME_WB, platformMonth) || [];
+  const byKey = (k) => rows.find(r=>r.key===k) || {shopee:0,lazada:0,tiktok:0,total:0};
+  const revenueRows = rows.filter(r=>r.group==='revenue');
+  const expenseRows = rows.filter(r=>r.group==='expenses');
+  const rollupRows = rows.filter(r=>r.group==='rollup');
+  const otherRows = rows.filter(r=>r.group==='other');
+  const netBeforeTax = byKey('netIncomeBeforeTaxes');
+  const netIncome = byKey('netIncome');
+
+  v.innerHTML = `
+    <div class="view-head"><h2>Platform Report</h2>
+      <select id="platformMonthSel" style="padding:7px 10px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;font-family:inherit;">
+        ${months.map(m=>`<option value="${esc(m)}" ${m===platformMonth?'selected':''}>${esc(m)}</option>`).join('')}
+      </select>
+    </div>
+    ${kpiGrid([
+      {label:'Total Revenues', value:peso(byKey('totalRevenues').total,{compact:true})},
+      {label:'Expenses per Platform', value:peso(expenseRows.find(r=>r.key==='expensesPerPlatform')?.total||0,{compact:true})},
+      {label:'Net Income Before Taxes', value:peso(netBeforeTax.total,{compact:true})},
+      {label:'Net Income', value:peso(netIncome.total,{compact:true}), sub:'grand total for the month', tone: netIncome.total>=0?'good':'bad'},
+    ])}
+    <div class="card" style="margin-top:12px;">
+      <h3>Revenue &amp; Expenses by Platform</h3>
+      <div class="cap">Typed in from each platform's monthly payout statement</div>
+      <div class="legend">
+        <span class="item"><span class="sw" style="background:var(--s2)"></span>Shopee</span>
+        <span class="item"><span class="sw" style="background:var(--s1)"></span>Lazada</span>
+        <span class="item"><span class="sw" style="background:var(--s3)"></span>TikTok</span>
+      </div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th>Line item</th><th>Shopee</th><th>Lazada</th><th>TikTok</th><th>Total</th></tr></thead>
+        <tbody>
+          ${revenueRows.map(platformRowHtml).join('')}
+          ${expenseRows.map(platformRowHtml).join('')}
+          ${platformRowHtml(netBeforeTax)}
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <h3>Capital &amp; Net Income Roll-up</h3>
+      <div class="cap">Gross income after cost of goods (capital) deployed per platform</div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th>Line item</th><th>Shopee</th><th>Lazada</th><th>TikTok</th><th>Total</th></tr></thead>
+        <tbody>
+          ${rollupRows.map(platformRowHtml).join('')}
+          ${otherRows.map(r=>`<tr><td>${esc(r.label)}</td><td class="num" colspan="3"></td><td class="num tot">${r.total?peso(r.total,{decimals:2}):'—'}</td></tr>`).join('')}
+          ${platformRowHtml(netIncome)}
+        </tbody>
+      </table></div>
+    </div>`;
+  document.getElementById('platformMonthSel').addEventListener('change', e => { platformMonth = e.target.value; renderPlatformReport(); });
 }
