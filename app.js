@@ -433,45 +433,104 @@ function extractPriceList(workbook){
   return out;
 }
 
-const PLATFORM_INCOME_ROWS = [
-  {key:"salesRevenue", label:"Sales revenue", group:"revenue"},
-  {key:"discounts", label:"Discounts & rebates", group:"revenue"},
-  {key:"lostClaim", label:"Lost claim", group:"revenue"},
-  {key:"reversalCommission", label:"Reversal commission", group:"revenue"},
-  {key:"totalRevenues", label:"Total revenues", group:"revenue", subtotal:true},
-  {key:"transactionFee", label:"Transaction / payment fee", group:"expenses"},
-  {key:"commissionFee", label:"Commission fee", group:"expenses"},
-  {key:"reverseShippingFee", label:"Reverse shipping fee", group:"expenses"},
-  {key:"refundAmount", label:"Refund amount", group:"expenses"},
-  {key:"sellerVoucherDiscount", label:"Seller voucher discount", group:"expenses"},
-  {key:"wrongWeightAdjustment", label:"Wrong weight adjustment", group:"expenses"},
-  {key:"sellerGrowthFee", label:"Seller growth fee", group:"expenses"},
-  {key:"affiliateCommission", label:"Affiliate commission / LazCoins", group:"expenses"},
-  {key:"servicePromoFee", label:"Service / promo pass / free shipping max fee", group:"expenses"},
-  {key:"withholdingTax", label:"Withholding tax / order processing fee", group:"expenses"},
-  {key:"adsEscrow", label:"Ads escrow / promo reversal", group:"expenses"},
-  {key:"expensesPerPlatform", label:"Expenses per platform", group:"expenses", subtotal:true},
-  {key:"netIncomeBeforeTaxes", label:"Net income before taxes", group:"grand"},
-  {key:"totalExpensesOperating", label:"Total expenses (operating)", group:"operating"},
-  {key:"totalGrossIncome", label:"Total gross income per platform", group:"rollup"},
-  {key:"totalCapital", label:"Total capital per platform", group:"rollup"},
-  {key:"netIncomePerPlatform", label:"Net income per platform", group:"rollup", subtotal:true},
-  {key:"marketplaceIncome", label:"Marketplace income", group:"other"},
-  {key:"gcash", label:"GCash / load / bills payment", group:"other"},
-  {key:"netIncome", label:"Net income", group:"grand"},
-];
-function extractPlatformIncomeMonth(workbook, monthName){
-  const sheet = workbook.Sheets[monthName];
-  if(!sheet) return null;
-  const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false});
-  const findRow = (label) => rows.find(r => cellText(r[0]).toLowerCase() === label.toLowerCase());
-  return PLATFORM_INCOME_ROWS.map(def => {
-    const r = findRow(def.label);
-    const shopee = r ? toNum(r[1]) : 0, lazada = r ? toNum(r[2]) : 0, tiktok = r ? toNum(r[3]) : 0;
-    // fall back to summing the 3 platform columns when the sheet's own Total
-    // cell is blank — most individual line-item rows never had one typed in.
-    const total = r ? (toNum(r[4]) || (shopee + lazada + tiktok)) : 0;
-    return { key: def.key, label: def.label, group: def.group, subtotal: !!def.subtotal, shopee, lazada, tiktok, total };
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+// Locate the "Income Statement — <Month> <Year>" block for one month inside
+// the SAME workbook already used for the Financials tab (BakeItMore IS
+// <Year>.xlsx) — your own sheet already has this per-platform breakdown for
+// every month you've filled in, so nothing extra needs to be maintained.
+function findPlatformIncomeBlock(finWorkbook, monthName, year){
+  const monthLower = monthName.toLowerCase();
+  for(const name of finWorkbook.SheetNames){
+    const rows = sheetRows(finWorkbook, name);
+    if(!rows) continue;
+    const startIdx = rows.findIndex(r => {
+      const joined = r.map(cellText).join(" ").toLowerCase().replace(/[–—]/g,"-");
+      return joined.includes("income statement") && joined.includes("- "+monthLower+" "+year);
+    });
+    if(startIdx < 0) continue;
+    let endIdx = rows.length;
+    for(let i=startIdx+1; i<rows.length; i++){
+      const joined = rows[i].map(cellText).join(" ").toLowerCase().replace(/[–—]/g,"-");
+      const isNextMonthMarker = joined.includes("income statement") && MONTH_NAMES.some(m => joined.includes("- "+m.toLowerCase()+" "));
+      if(isNextMonthMarker){ endIdx = i; break; }
+    }
+    return rows.slice(startIdx, endIdx);
+  }
+  return null;
+}
+// value columns in this sheet are consistently at index 4/5/6 (Shopee/Lazada/
+// Tiktok) with Total at index 7 — except a couple of rows whose Total cell
+// sits further right due to extra padding columns, so fall back to summing
+// the three platform values whenever the Total cell itself is blank.
+function readISRow(blockRows, label){
+  const row = blockRows.find(r => r.some(c => cellText(c).toLowerCase() === label.toLowerCase()));
+  if(!row) return {shopee:0, lazada:0, tiktok:0, total:0};
+  const shopee = toNum(row[4]), lazada = toNum(row[5]), tiktok = toNum(row[6]);
+  const total = toNum(row[7]) || (shopee + lazada + tiktok);
+  return {shopee, lazada, tiktok, total};
+}
+// Marketplace income / GCash / Net income are single blended figures with no
+// per-platform split — their value sits at index 4, not index 7.
+function readISTotalOnly(blockRows, label){
+  const row = blockRows.find(r => r.some(c => cellText(c).toLowerCase() === label.toLowerCase()));
+  return {shopee:0, lazada:0, tiktok:0, total: row ? toNum(row[4]) : 0};
+}
+// Individual fee/revenue line items are whatever's typed between two anchor
+// rows (e.g. "Revenue" through "Total revenues") — their exact wording
+// varies month to month, so read the section generically rather than by a
+// fixed label list.
+function readISSection(blockRows, headerLabel, endLabel){
+  const startI = blockRows.findIndex(r => r.some(c => cellText(c).toLowerCase() === headerLabel.toLowerCase()));
+  const endI = blockRows.findIndex(r => r.some(c => cellText(c).toLowerCase() === endLabel.toLowerCase()));
+  if(startI<0 || endI<0 || endI<=startI) return [];
+  const out = [];
+  for(let i=startI+1; i<endI; i++){
+    const row = blockRows[i];
+    const label = cellText(row[2]) || cellText(row[3]);
+    const shopee = toNum(row[4]), lazada = toNum(row[5]), tiktok = toNum(row[6]);
+    if(!label || (!shopee && !lazada && !tiktok)) continue;
+    out.push({label, shopee, lazada, tiktok, total: shopee+lazada+tiktok});
+  }
+  return out;
+}
+function extractPlatformIncomeMonth(finWorkbook, monthName){
+  const [name, yearStr] = monthName.split(" ");
+  const block = findPlatformIncomeBlock(finWorkbook, name, yearStr);
+  if(!block) return null;
+
+  const rows = [];
+  readISSection(block, "Revenue", "Total revenues").forEach((r,i) => rows.push({key:"rev"+i, label:r.label, group:"revenue", subtotal:false, ...r}));
+  rows.push({key:"totalRevenues", label:"Total revenues", group:"revenue", subtotal:true, ...readISRow(block,"Total revenues")});
+  readISSection(block, "Expenses", "Expenses per platform").forEach((r,i) => rows.push({key:"exp"+i, label:r.label, group:"expenses", subtotal:false, ...r}));
+  rows.push({key:"expensesPerPlatform", label:"Expenses per platform", group:"expenses", subtotal:true, ...readISRow(block,"Expenses per platform")});
+  rows.push({key:"netIncomeBeforeTaxes", label:"Net income before taxes", group:"grand", subtotal:false, ...readISRow(block,"Net Income Before Taxes")});
+  rows.push({key:"totalExpensesOperating", label:"Total expenses (operating)", group:"operating", subtotal:false, ...readISRow(block,"Total Expenses")});
+  rows.push({key:"totalGrossIncome", label:"Total gross income per platform", group:"rollup", subtotal:false, ...readISRow(block,"Total Gross Income per platform")});
+  rows.push({key:"totalCapital", label:"Total capital per platform", group:"rollup", subtotal:false, ...readISRow(block,"Total Capital per Platform")});
+  rows.push({key:"netIncomePerPlatform", label:"Net income per platform", group:"rollup", subtotal:true, ...readISRow(block,"Net Income per platform")});
+  rows.push({key:"marketplaceIncome", label:"Marketplace income", group:"other", subtotal:false, ...readISTotalOnly(block,"MarketPlace Income")});
+  rows.push({key:"gcash", label:"GCash / load / bills payment", group:"other", subtotal:false, ...readISTotalOnly(block,"Gcash/Load/BillsPayment")});
+  rows.push({key:"netIncome", label:"Net income", group:"grand", subtotal:false, ...readISTotalOnly(block,"Net Income")});
+  return rows;
+}
+// scan the workbook for every "Income Statement — <Month> <Year>" block that
+// actually has revenue logged (skips future empty placeholder months).
+function findAvailablePlatformMonths(finWorkbook){
+  const found = [];
+  for(const name of finWorkbook.SheetNames){
+    const rows = sheetRows(finWorkbook, name);
+    if(!rows) continue;
+    rows.forEach(r => {
+      const joined = r.map(cellText).join(" ").replace(/[–—]/g,"-");
+      const m = joined.match(/Income Statement\s*-\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i);
+      if(m) found.push(m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase()+" "+m[2]);
+    });
+  }
+  return [...new Set(found)].filter(m => {
+    const rows = extractPlatformIncomeMonth(finWorkbook, m);
+    const tr = rows && rows.find(r=>r.key==="totalRevenues");
+    return tr && tr.total > 0;
   });
 }
 function sortMonthNames(names){
@@ -483,6 +542,21 @@ function monthYear(name){
   const d = new Date(name + " 1");
   return isNaN(d.getTime()) ? null : d.getFullYear();
 }
+// Only the fixed summary rows have a stable key across every month — the
+// detail revenue/expense line items vary in wording month to month (see
+// readISSection), so they aren't safe to sum across months by position.
+const YTD_FIXED_ROWS = [
+  {key:"totalRevenues", label:"Total revenues", group:"revenue", subtotal:true},
+  {key:"expensesPerPlatform", label:"Expenses per platform", group:"expenses", subtotal:true},
+  {key:"netIncomeBeforeTaxes", label:"Net income before taxes", group:"grand"},
+  {key:"totalExpensesOperating", label:"Total expenses (operating)", group:"operating"},
+  {key:"totalGrossIncome", label:"Total gross income per platform", group:"rollup"},
+  {key:"totalCapital", label:"Total capital per platform", group:"rollup"},
+  {key:"netIncomePerPlatform", label:"Net income per platform", group:"rollup", subtotal:true},
+  {key:"marketplaceIncome", label:"Marketplace income", group:"other"},
+  {key:"gcash", label:"GCash / load / bills payment", group:"other"},
+  {key:"netIncome", label:"Net income", group:"grand"},
+];
 function computeYTD(workbook, months){
   if(!months.length) return null;
   const years = months.map(monthYear).filter(y=>y!==null);
@@ -491,9 +565,10 @@ function computeYTD(workbook, months){
   const ytdMonths = months.filter(m => monthYear(m) === targetYear);
   const perMonth = ytdMonths.map(m => ({ m, rows: extractPlatformIncomeMonth(workbook, m) })).filter(x=>x.rows);
   if(!perMonth.length) return null;
-  const agg = PLATFORM_INCOME_ROWS.map(def => ({ key:def.key, label:def.label, group:def.group, subtotal:!!def.subtotal, shopee:0, lazada:0, tiktok:0, total:0 }));
+  const agg = YTD_FIXED_ROWS.map(def => ({ key:def.key, label:def.label, group:def.group, subtotal:!!def.subtotal, shopee:0, lazada:0, tiktok:0, total:0 }));
   perMonth.forEach(({rows}) => rows.forEach(r => {
     const a = agg.find(x=>x.key===r.key);
+    if(!a) return; // skip dynamic-labeled detail line items
     a.shopee += r.shopee; a.lazada += r.lazada; a.tiktok += r.tiktok; a.total += r.total;
   }));
   return { rows: agg, months: ytdMonths, year: targetYear };
@@ -503,7 +578,7 @@ function computeYTD(workbook, months){
 async function loadAll(){
   setStatus("loading");
   const errors = [];
-  let salesWb, finWb, invWb, plWb, platWb;
+  let salesWb, finWb, invWb, plWb;
 
   try{
     const otFile = await resolveOrderTrackerFile();
@@ -523,18 +598,17 @@ async function loadAll(){
     plWb = (await downloadWorkbook(CONFIG.PRICELIST_FILE_ID)).workbook;
   } catch(e){ errors.push("Price List: " + e.message); }
 
-  try{
-    platWb = (await downloadWorkbook(CONFIG.PLATFORM_INCOME_FILE_ID)).workbook;
-  } catch(e){ errors.push("Platform Income: " + e.message); }
-
   try{ if(salesWb) window.SALES_LIVE = extractSales(salesWb); } catch(e){ errors.push("Order Tracker parse: " + e.message); }
   try{ if(finWb) window.FIN_LIVE = extractFinancials(finWb); } catch(e){ errors.push("Income Statement parse: " + e.message); }
   try{ if(invWb) window.INV_LIVE = extractInventory(invWb); } catch(e){ errors.push("Inventory parse: " + e.message); }
   try{ if(plWb) window.PL_LIVE = extractPriceList(plWb); } catch(e){ errors.push("Price List parse: " + e.message); }
   try{
-    if(platWb){
-      window.PLATFORM_INCOME_WB = platWb;
-      window.PLATFORM_INCOME_MONTHS = sortMonthNames(platWb.SheetNames);
+    // Platform Report reuses the same Income Statement workbook — your own
+    // sheet already has every month's Shopee/Lazada/TikTok breakdown, so
+    // there's no separate file to fetch or keep in sync.
+    if(finWb){
+      window.PLATFORM_INCOME_WB = finWb;
+      window.PLATFORM_INCOME_MONTHS = sortMonthNames(findAvailablePlatformMonths(finWb));
     }
   } catch(e){ errors.push("Platform Income parse: " + e.message); }
 
