@@ -467,10 +467,11 @@ function extractPlatformIncomeMonth(workbook, monthName){
   const findRow = (label) => rows.find(r => cellText(r[0]).toLowerCase() === label.toLowerCase());
   return PLATFORM_INCOME_ROWS.map(def => {
     const r = findRow(def.label);
-    return {
-      key: def.key, label: def.label, group: def.group, subtotal: !!def.subtotal,
-      shopee: r ? toNum(r[1]) : 0, lazada: r ? toNum(r[2]) : 0, tiktok: r ? toNum(r[3]) : 0, total: r ? toNum(r[4]) : 0,
-    };
+    const shopee = r ? toNum(r[1]) : 0, lazada = r ? toNum(r[2]) : 0, tiktok = r ? toNum(r[3]) : 0;
+    // fall back to summing the 3 platform columns when the sheet's own Total
+    // cell is blank — most individual line-item rows never had one typed in.
+    const total = r ? (toNum(r[4]) || (shopee + lazada + tiktok)) : 0;
+    return { key: def.key, label: def.label, group: def.group, subtotal: !!def.subtotal, shopee, lazada, tiktok, total };
   });
 }
 function sortMonthNames(names){
