@@ -383,6 +383,7 @@ function platformTablesHtml(rows, netLabel){
   const otherRows = rows.filter(r=>r.group==='other');
   const netBeforeTax = byKey('netIncomeBeforeTaxes');
   const netIncome = byKey('netIncome');
+  const opEx = byKey('totalExpensesOperating');
 
   return `
     ${kpiGrid([
@@ -405,8 +406,10 @@ function platformTablesHtml(rows, netLabel){
           ${revenueRows.map(platformRowHtml).join('')}
           ${expenseRows.map(platformRowHtml).join('')}
           ${platformRowHtml(netBeforeTax)}
+          ${platformRowHtml(opEx)}
         </tbody>
       </table></div>
+      <div class="callout" style="font-size:11.5px;color:var(--ink-3);margin-top:10px;">"Total expenses (operating)" is company-wide overhead (rent, salaries, utilities, etc.) — mostly booked under Shopee's column in the source sheet, not split per platform.</div>
     </div>
     <div class="card" style="margin-top:12px;">
       <h3>Capital &amp; Net Income Roll-up</h3>
