@@ -24,8 +24,11 @@ const CONFIG = {
   INVENTORY_FILE_ID: "1aomSz_xj1UHwEgbFj_HwJcyy6EbVmjyzfSSsjyxmGJ8",
   PRICELIST_FILE_ID: "1BBgxtUYzO6l-q41GCQW7zTpzlgufEYEu",
 
-  // One sheet, one tab per month (e.g. "July 2026", "August 2026") — the
-  // Shopee/Lazada/TikTok platform income statements you type in by hand
-  // each month from the downloaded platform reports.
-  PLATFORM_INCOME_FILE_ID: "1vvkpK4hykchRD3Dr66FUil22r4Lk_ad2pLNQOP7fjrY",
+  // NOTE: the Platform Report tab no longer needs its own file — it reads
+  // the Shopee/Lazada/TikTok breakdown straight out of the same Income
+  // Statement workbook resolved above (INCOME_STATEMENT_FOLDER_ID), since
+  // that file already has an "Income Statement — <Month> <Year>" block per
+  // month. The old dedicated sheet (below) is no longer used by the app —
+  // keeping the ID here only for reference.
+  PLATFORM_INCOME_FILE_ID_UNUSED: "1vvkpK4hykchRD3Dr66FUil22r4Lk_ad2pLNQOP7fjrY",
 };
