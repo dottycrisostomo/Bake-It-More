@@ -433,11 +433,55 @@ function extractPriceList(workbook){
   return out;
 }
 
+const PLATFORM_INCOME_ROWS = [
+  {key:"salesRevenue", label:"Sales revenue", group:"revenue"},
+  {key:"discounts", label:"Discounts & rebates", group:"revenue"},
+  {key:"lostClaim", label:"Lost claim", group:"revenue"},
+  {key:"reversalCommission", label:"Reversal commission", group:"revenue"},
+  {key:"totalRevenues", label:"Total revenues", group:"revenue", subtotal:true},
+  {key:"transactionFee", label:"Transaction / payment fee", group:"expenses"},
+  {key:"commissionFee", label:"Commission fee", group:"expenses"},
+  {key:"refundAmount", label:"Refund amount", group:"expenses"},
+  {key:"sellerVoucherDiscount", label:"Seller voucher discount", group:"expenses"},
+  {key:"wrongWeightAdjustment", label:"Wrong weight adjustment", group:"expenses"},
+  {key:"sellerGrowthFee", label:"Seller growth fee", group:"expenses"},
+  {key:"affiliateCommission", label:"Affiliate commission / LazCoins", group:"expenses"},
+  {key:"servicePromoFee", label:"Service / promo pass / free shipping max fee", group:"expenses"},
+  {key:"withholdingTax", label:"Withholding tax / order processing fee", group:"expenses"},
+  {key:"adsEscrow", label:"Ads escrow / promo reversal", group:"expenses"},
+  {key:"expensesPerPlatform", label:"Expenses per platform", group:"expenses", subtotal:true},
+  {key:"netIncomeBeforeTaxes", label:"Net income before taxes", group:"grand"},
+  {key:"totalGrossIncome", label:"Total gross income per platform", group:"rollup"},
+  {key:"totalCapital", label:"Total capital per platform", group:"rollup"},
+  {key:"netIncomePerPlatform", label:"Net income per platform", group:"rollup", subtotal:true},
+  {key:"marketplaceIncome", label:"Marketplace income", group:"other"},
+  {key:"gcash", label:"GCash / load / bills payment", group:"other"},
+  {key:"netIncome", label:"Net income", group:"grand"},
+];
+function extractPlatformIncomeMonth(workbook, monthName){
+  const sheet = workbook.Sheets[monthName];
+  if(!sheet) return null;
+  const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false});
+  const findRow = (label) => rows.find(r => cellText(r[0]).toLowerCase() === label.toLowerCase());
+  return PLATFORM_INCOME_ROWS.map(def => {
+    const r = findRow(def.label);
+    return {
+      key: def.key, label: def.label, group: def.group, subtotal: !!def.subtotal,
+      shopee: r ? toNum(r[1]) : 0, lazada: r ? toNum(r[2]) : 0, tiktok: r ? toNum(r[3]) : 0, total: r ? toNum(r[4]) : 0,
+    };
+  });
+}
+function sortMonthNames(names){
+  const parsed = names.map(n => ({n, d: new Date(n + " 1")}));
+  if(parsed.every(p => !isNaN(p.d.getTime()))) return parsed.sort((a,b)=>a.d-b.d).map(p=>p.n);
+  return [...names];
+}
+
 /* ============================== ORCHESTRATION ============================== */
 async function loadAll(){
   setStatus("loading");
   const errors = [];
-  let salesWb, finWb, invWb, plWb;
+  let salesWb, finWb, invWb, plWb, platWb;
 
   try{
     const otFile = await resolveOrderTrackerFile();
@@ -457,10 +501,20 @@ async function loadAll(){
     plWb = (await downloadWorkbook(CONFIG.PRICELIST_FILE_ID)).workbook;
   } catch(e){ errors.push("Price List: " + e.message); }
 
+  try{
+    platWb = (await downloadWorkbook(CONFIG.PLATFORM_INCOME_FILE_ID)).workbook;
+  } catch(e){ errors.push("Platform Income: " + e.message); }
+
   try{ if(salesWb) window.SALES_LIVE = extractSales(salesWb); } catch(e){ errors.push("Order Tracker parse: " + e.message); }
   try{ if(finWb) window.FIN_LIVE = extractFinancials(finWb); } catch(e){ errors.push("Income Statement parse: " + e.message); }
   try{ if(invWb) window.INV_LIVE = extractInventory(invWb); } catch(e){ errors.push("Inventory parse: " + e.message); }
   try{ if(plWb) window.PL_LIVE = extractPriceList(plWb); } catch(e){ errors.push("Price List parse: " + e.message); }
+  try{
+    if(platWb){
+      window.PLATFORM_INCOME_WB = platWb;
+      window.PLATFORM_INCOME_MONTHS = sortMonthNames(platWb.SheetNames);
+    }
+  } catch(e){ errors.push("Platform Income parse: " + e.message); }
 
   renderAll();
   setStatus(errors.length ? "warn" : "live", errors);
