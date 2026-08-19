@@ -5,7 +5,7 @@
 // Google Drive, since this page has no sign-in and reads them anonymously.
 
 const CONFIG = {
-  API_KEY: "REPLACE_WITH_YOUR_API_KEY",
+  API_KEY: "AIzaSyDKHE-HVQh537XaqCs0atc25T2OdFlYwJo",
   PRICELIST_FILE_ID: "1BBgxtUYzO6l-q41GCQW7zTpzlgufEYEu",
   INVENTORY_FILE_ID: "1aomSz_xj1UHwEgbFj_HwJcyy6EbVmjyzfSSsjyxmGJ8",
 };
